@@ -1,0 +1,25 @@
+{application, apns_erl,
+    [
+        {description, "APNS SCPF service"},
+        {vsn, {cmd, "echo `cat APP_VERSION`"}},
+        {registered, []},
+        {applications, [
+                kernel,
+                stdlib,
+                sasl,
+                crypto,
+                public_key,
+                ssl,
+                lager,
+                sc_push_lib,
+                apns_erl_util
+            ]},
+        {mod, { apns_erl_app, [
+                    sc_push_svc_apns,
+                    apns_erl_session_sup,
+                    apns_erl_session,
+                    apns_erl_feedback_session
+                ]}},
+        {env, []}
+    ]
+}.
