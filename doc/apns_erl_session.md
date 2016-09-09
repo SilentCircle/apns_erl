@@ -8,11 +8,11 @@
 
 APNS server session.
 
-Copyright (c) 2015 Silent Circle
+Copyright (c) (C) 2012,2013 Silent Circle LLC
 
 __Behaviours:__ [`gen_fsm`](gen_fsm.md).
 
-__Authors:__ Edwin Fine ([`efine@silentcircle.com`](mailto:efine@silentcircle.com)), Sebastien Merle.
+__Authors:__ Edwin Fine ([`efine@silentcircle.com`](mailto:efine@silentcircle.com)), Sebastien Merle ([`sebastien.merle@silentcircle-llc.com`](mailto:sebastien.merle@silentcircle-llc.com)).
 
 <a name="description"></a>
 
@@ -170,6 +170,20 @@ to close the SSL connection after shutting it down.</p><p></p><p>Default value: 
 
 
 
+<dt><code>disable_apns_cert_validation</code>:</dt>
+
+
+
+
+<dd><p><code>true</code> if APNS certificate validation against its bundle id
+should be disabled, <code>false</code> if the validation should be done.
+This option exists to allow for changes in APNS certificate layout
+without having to change code.</p><p></p>Default value: <code>false</code>.
+</dd>
+
+
+
+
 <dt><code>ssl_opts</code>:</dt>
 
 
@@ -177,6 +191,21 @@ to close the SSL connection after shutting it down.</p><p></p><p>Default value: 
 
 <dd>is the property list of SSL options including the certificate file path.
 </dd>
+
+
+
+
+<dt><code>feedback_enabled</code>:</dt>
+
+
+
+
+<dd><p>is <code>true</code> if the feedback service should be started, <code>false</code>
+otherwise. This allows servers to be configured so that zero
+or one server connects to the feedback service. The feedback
+service might be going away or become unnecessary with HTTP/2,
+and in any case, having more than one server connect to the
+feedback service risks losing data.</p><p></p><p>Default value: <code>false</code>.</p><p></p></dd>
 
 
 
@@ -217,21 +246,23 @@ reconnections.</p><p></p><p>Default value: <code>3600000</code>.</p><p></p></dd>
 Example:
 
 ```
-       [{host, "gateway.sandbox.push.apple.com"},
+       [{host, "gateway.push.apple.com"},
         {port, 2195},
-        {bundle_seed_id, <<"com.example.Example">>},
-        {bundle_id, <<"com.example,Example">>},
+        {bundle_seed_id, <<"com.example.MyApp">>},
+        {bundle_id, <<"com.example.MyApp">>},
         {fake_token, <<"XXXXXX">>},
         {retry_delay, 1000},
         {checkpoint_period, 60000},
         {checkpoint_max, 10000},
         {close_timeout, 5000},
-        {feedback_host, "feedback.sandbox.push.apple.com"},
+        {disable_apns_cert_validation, false},
+        {feedback_enabled, false},
+        {feedback_host, "feedback.push.apple.com"},
         {feedback_port, 2196},
         {feedback_retry_delay, 3600000},
         {ssl_opts,
-         [{certfile, "/etc/somewhere/certs/com.example.Example--DEV.cert.pem"},
-          {keyfile, "/etc/somewhere/certs/com.example.Example--DEV.key.unencrypted.pem"}
+         [{certfile, "/etc/somewhere/certs/com.example.MyApp.cert.pem"},
+          {keyfile, "/etc/somewhere/certs/com.example.MyApp.key.unencrypted.pem"}
          ]}
        ]
 ```
@@ -258,7 +289,7 @@ fsm_ref() = atom() | pid()
 
 
 <pre><code>
-option() = {host, string()} | {port, non_neg_integer} | {bundle_seed_id, binary()} | {bundle_id, binary()} | {ssl_opts, list()} | {fake_token, binary()} | {retry_delay, non_neg_integer()} | {retry_max, pos_integer()} | {checkpoint_period, non_neg_integer()} | {checkpoint_max, non_neg_integer()} | {close_timeout, non_neg_integer()} | {feedback_host, string()} | {feedback_port, non_neg_integer()} | {feedback_retry_delay, non_neg_integer()}
+option() = {host, string()} | {port, non_neg_integer} | {bundle_seed_id, binary()} | {bundle_id, binary()} | {ssl_opts, list()} | {fake_token, binary()} | {retry_delay, non_neg_integer()} | {retry_max, pos_integer()} | {checkpoint_period, non_neg_integer()} | {checkpoint_max, non_neg_integer()} | {close_timeout, non_neg_integer()} | {feedback_enabled, boolean()} | {feedback_host, string()} | {feedback_port, non_neg_integer()} | {feedback_retry_delay, non_neg_integer()}
 </code></pre>
 
 

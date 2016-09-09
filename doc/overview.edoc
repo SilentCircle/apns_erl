@@ -1,17 +1,18 @@
 @author Edwin Fine <efine@silentcircle.com>
-@copyright 2015 Silent Circle
+@copyright 2015,2016 Silent Circle
 @version {@version}
-@title Apple Push Notification Service SCPF service
-@reference See <a href="https://developer.apple.com/library/ios/#documentation/NetworkingInternet/Conceptual/RemoteNotificationsPG/">Local and Push Notification Programming Guide</a> (requires Apple Developer login).
+@title [DEPRECATED] Apple Push Notification Service SCPF service
 
-@doc `apns_erl' is a Silent Circle Push Framework service provider for the Apple Push Notification Service (APNS).
+@doc `apns_erl' is a Silent Circle Push Framework service provider for the binary (pre-HTTP/2) Apple Push Notification Service (APNS).
+
+**NOTE**: This is deprecated in favor of the HTTP/2 service provider, `apns_erlv3'.
 
 == Prerequisites for building ==
 
 <ul>
-<li>Linux or OS X</li>
-<li>Erlang >= R17</li>
-<li>rebar >= 2.0.0</li>
+<li>Linux</li>
+<li>Erlang >= 18.3</li>
+<li>rebar3 >= 3.3.1</li>
 <li>GNU make >= 3.81 or later</li>
 </ul>
 
@@ -26,22 +27,20 @@ make
 
 == Running test cases ==
 
-This will run dialyzer and Common Test. If this is a first run,
-dialyzer will need to build a PLT, which could take some time.
-
-Note: Common Test cases are temporarily out of order and are not actually
-called.
+Note: Common Test cases are permanently out of order because this is deprecated.
 
 ```
-make test
+make ct
 '''
 
 Output is in logs/index.html.
 
 == Building documentation ==
 
+Documentation uses `edown' to produce Markdown documents.
+
 ```
-make doc
+make docs
 '''
 
 Output is in the doc directory.

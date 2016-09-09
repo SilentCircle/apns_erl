@@ -1,5 +1,5 @@
 %%% ==========================================================================
-%%% Copyright 2015 Silent Circle
+%%% Copyright 2012-2016 Silent Circle
 %%%
 %%% Licensed under the Apache License, Version 2.0 (the "License");
 %%% you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 
 %%%-------------------------------------------------------------------
 %%% @author Edwin Fine <efine@silentcircle.com>
-%%% @author Sebastien Merle
-%%% @copyright 2015 Silent Circle
+%%% @author Sebastien Merle <sebastien.merle@silentcircle-llc.com>
+%%% @copyright (C) 2012,2013 Silent Circle LLC
 %%% @doc
 %%% APNS server session. There must be one session per App Bundle ID and
 %%% certificate (Development or Production) combination. Sessions
@@ -113,8 +113,27 @@
 %%%     Default value: `5000'.
 %%%
 %%% </dd>
+%%% <dt>`disable_apns_cert_validation':</dt>
+%%% <dd>`true' if APNS certificate validation against its bundle id
+%%%     should be disabled, `false' if the validation should be done.
+%%%     This option exists to allow for changes in APNS certificate layout
+%%%     without having to change code.
+%%%
+%%%     Default value: `false'.
+%%% </dd>
 %%% <dt>`ssl_opts':</dt>
 %%% <dd>is the property list of SSL options including the certificate file path.
+%%% </dd>
+%%% <dt>`feedback_enabled':</dt>
+%%% <dd>is `true' if the feedback service should be started, `false'
+%%%     otherwise. This allows servers to be configured so that zero
+%%%     or one server connects to the feedback service. The feedback
+%%%     service might be going away or become unnecessary with HTTP/2,
+%%%     and in any case, having more than one server connect to the
+%%%     feedback service risks losing data.
+%%%
+%%%     Default value: `false'.
+%%%
 %%% </dd>
 %%% <dt>`feedback_host':</dt>
 %%% <dd>Is the hostname of the feedback service; if not specified and
@@ -138,21 +157,23 @@
 %%%
 %%% Example:
 %%% ```
-%%%     [{host, "gateway.sandbox.push.apple.com"},
+%%%     [{host, "gateway.push.apple.com"},
 %%%      {port, 2195},
-%%%      {bundle_seed_id, <<"com.example.Example">>},
-%%%      {bundle_id, <<"com.example,Example">>},
+%%%      {bundle_seed_id, <<"com.example.MyApp">>},
+%%%      {bundle_id, <<"com.example.MyApp">>},
 %%%      {fake_token, <<"XXXXXX">>},
 %%%      {retry_delay, 1000},
 %%%      {checkpoint_period, 60000},
 %%%      {checkpoint_max, 10000},
 %%%      {close_timeout, 5000},
-%%%      {feedback_host, "feedback.sandbox.push.apple.com"},
+%%%      {disable_apns_cert_validation, false},
+%%%      {feedback_enabled, false},
+%%%      {feedback_host, "feedback.push.apple.com"},
 %%%      {feedback_port, 2196},
 %%%      {feedback_retry_delay, 3600000},
 %%%      {ssl_opts,
-%%%       [{certfile, "/etc/somewhere/certs/com.example.Example--DEV.cert.pem"},
-%%%        {keyfile, "/etc/somewhere/certs/com.example.Example--DEV.key.unencrypted.pem"}
+%%%       [{certfile, "/etc/somewhere/certs/com.example.MyApp.cert.pem"},
+%%%        {keyfile, "/etc/somewhere/certs/com.example.MyApp.key.unencrypted.pem"}
 %%%       ]}
 %%%     ]
 %%% '''
@@ -241,34 +262,35 @@
 
 %%% Process state
 -record(?S,
-        {name           = undefined              :: atom(),
-         last_seq       = 0                      :: non_neg_integer(),
-         host           = ""                     :: string(),
-         port           = ?DEFAULT_APNS_PORT     :: non_neg_integer(),
-         bundle_seed_id = <<>>                   :: binary(),
-         bundle_id      = <<>>                   :: binary(),
-         ssl_opts       = []                     :: list(),
-         sock           = undefined              :: term(),
-         feedback_name  = undefined              :: atom(),
-         feedback_opts  = []                     :: list(),
-         feedback_pid   = undefined              :: pid() | undefined,
-         retry_delay    = ?DEFAULT_RETRY_DELAY   :: non_neg_integer(),
-         retry_max      = ?DEFAULT_RETRY_MAX     :: non_neg_integer(),
-         retry_ref      = undefined              :: reference() | undefined,
-         retries        = 1                      :: non_neg_integer(),
-         history        = undefined              :: ets:tab() | undefined,
-         history_size   = 0                      :: non_neg_integer(),
-         fake_token     = <<>>                   :: binary(),
-         queue          = undefined              :: sc_queue() | undefined,
-         stop_callers   = []                     :: list(),
-         close_timeout  = ?DEFAULT_CLOSE_TIMEOUT :: non_neg_integer(),
-         close_ref      = undefined              :: reference() | undefined,
-         checkpoint_ref = undefined              :: reference() | undefined,
-         checkpoint_seq = undefined              :: non_neg_integer() | undefined,
+        {name               = undefined                  :: atom(),
+         last_seq           = 0                          :: non_neg_integer(),
+         host               = ""                         :: string(),
+         port               = ?DEFAULT_APNS_PORT         :: non_neg_integer(),
+         bundle_seed_id     = <<>>                       :: binary(),
+         bundle_id          = <<>>                       :: binary(),
+         ssl_opts           = []                         :: list(),
+         sock               = undefined                  :: term(),
+         feedback_name      = undefined                  :: atom(),
+         feedback_enabled   = false                      :: boolean(),
+         feedback_opts      = []                         :: list(),
+         feedback_pid       = undefined                  :: pid() | undefined,
+         retry_delay        = ?DEFAULT_RETRY_DELAY       :: non_neg_integer(),
+         retry_max          = ?DEFAULT_RETRY_MAX         :: non_neg_integer(),
+         retry_ref          = undefined                  :: reference() | undefined,
+         retries            = 1                          :: non_neg_integer(),
+         history            = undefined                  :: ets:tab() | undefined,
+         history_size       = 0                          :: non_neg_integer(),
+         fake_token         = <<>>                       :: binary(),
+         queue              = undefined                  :: sc_queue() | undefined,
+         stop_callers       = []                         :: list(),
+         close_timeout      = ?DEFAULT_CLOSE_TIMEOUT     :: non_neg_integer(),
+         close_ref          = undefined                  :: reference() | undefined,
+         checkpoint_ref     = undefined                  :: reference() | undefined,
+         checkpoint_seq     = undefined                  :: non_neg_integer() | undefined,
          checkpoint_period  = ?DEFAULT_CHECKPOINT_PERIOD :: non_neg_integer(),
          checkpoint_max     = ?DEFAULT_CHECKPOINT_MAX    :: non_neg_integer(),
-         checkpoint_pending = false              :: boolean(),
-         checkpoint_time    = undefined          :: erlang:timestamp() | undefined
+         checkpoint_pending = false                      :: boolean(),
+         checkpoint_time    = undefined                  :: erlang:timestamp() | undefined
         }).
 
 %% Notification
@@ -308,6 +330,7 @@
                   {checkpoint_period, non_neg_integer()} |
                   {checkpoint_max, non_neg_integer()} |
                   {close_timeout, non_neg_integer()} |
+                  {feedback_enabled, boolean()} |
                   {feedback_host, string()} |
                   {feedback_port, non_neg_integer()} |
                   {feedback_retry_delay, non_neg_integer()}.
@@ -488,7 +511,7 @@ get_state(FsmRef) ->
 %%% ==========================================================================
 
 init([Name, Opts]) ->
-    _ = lager:info("APNS session ~p started", [Name]),
+    lager:info("APNS session ~p started", [Name]),
     try
         process_flag(trap_exit, true),
         State = init_queue(init_history(init_state(Name, Opts))),
@@ -500,8 +523,7 @@ init([Name, Opts]) ->
 
 
 handle_event(Event, StateName, State) ->
-    _ = lager:warning("Received unexpected event while ~p: ~p",
-                      [StateName, Event]),
+    lager:warning("Received unexpected event while ~p: ~p", [StateName, Event]),
     continue(StateName, State).
 
 
@@ -518,8 +540,8 @@ handle_sync_event(get_state, _From, StateName, State) ->
     reply({ok, State}, StateName, State);
 
 handle_sync_event(Event, {Pid, _Tag}, StateName, State) ->
-    _ = lager:warning("Received unexpected event from ~p while ~p: ~p",
-                      [Pid, StateName, Event]),
+    lager:warning("Received unexpected event from ~p while ~p: ~p",
+                  [Pid, StateName, Event]),
     reply({error, invalid_event}, StateName, State).
 
 
@@ -536,42 +558,42 @@ handle_info({ssl, Socket, Data}, disconnecting, #?S{sock = Socket} = State) ->
     end;
 
 handle_info({ssl, Socket, _Data}, StateName, State) ->
-    _ = lager:warning("Received data from unknown socket while ~p: ~p",
-                      [StateName, Socket]),
+    lager:warning("Received data from unknown socket while ~p: ~p",
+                  [StateName, Socket]),
     continue(StateName, State);
 
 handle_info({ssl_closed, Socket}, StateName, #?S{sock = Socket} = State) ->
-    _ = lager:debug("SSL socket ~p closed by peer", [Socket]),
+    lager:debug("SSL socket ~p closed by peer", [Socket]),
     handle_connection_closure(StateName, State);
 
 handle_info({ssl_closed, Socket}, StateName, State) ->
-    _ = lager:warning("Received close message from unknown socket ~p while ~p",
-                      [Socket, StateName]),
+    lager:warning("Received close message from the unknown socket ~p while ~p",
+                  [Socket, StateName]),
     continue(StateName, State);
 
 handle_info({ssl_error, Socket, Reason}, StateName, #?S{sock = Socket} = State) ->
-    _ = lager:error("SSL error on socket ~p while ~p: ~p",
-                    [Socket, StateName, Reason]),
+    lager:error("SSL error on socket ~p while ~p: ~p",
+                [Socket, StateName, Reason]),
     continue(StateName, State);
 
 handle_info({ssl_error, Socket, Reason}, StateName, State) ->
-    _ = lager:warning("Received SSL error from unknown socket ~p while ~p: ~p",
-                      [Socket, StateName, Reason]),
+    lager:warning("Received SSL error from the unknown socket ~p while ~p: ~p",
+                  [Socket, StateName, Reason]),
     continue(StateName, State);
 
 handle_info({'EXIT', Pid, Reason}, StateName, #?S{feedback_pid = Pid} = State) ->
-    _ = lager:error("APNS feedback handler died while ~p: ~p",
-                    [StateName, Reason]),
+    lager:error("APNS feedback handler died while ~p: ~p",
+                [StateName, Reason]),
     continue(StateName, start_feedback(State#?S{feedback_pid = undefined}));
 
 handle_info({'EXIT', Pid, Reason}, StateName, State) ->
-    _ = lager:error("Unknown process ~p died while ~p: ~p",
-                    [Pid, StateName, Reason]),
+    lager:error("Unknown process ~p died while ~p: ~p",
+                [Pid, StateName, Reason]),
     continue(StateName, State);
 
 handle_info(Info, StateName, State) ->
-    _ = lager:warning("Unexpected message received in state ~p: ~p",
-                      [StateName, Info]),
+    lager:warning("Unexpected message received in state ~p: ~p",
+                  [StateName, Info]),
     continue(StateName, State).
 
 
@@ -579,14 +601,13 @@ terminate(Reason, StateName, State) ->
     WaitingCallers = State#?S.stop_callers,
     % Mostly to know how many unconfirmed notifications we have:
     NewState = recover_history(State),
-    _ = lager:info("APNS session ~p terminated in state ~p with ~w queued "
-                   "notifications: ~p",
-                   [NewState#?S.name, StateName, queue_length(NewState),
-                    Reason]),
+    lager:info("APNS session ~p terminated in state ~p with ~w queued "
+               "notifications: ~p",
+               [NewState#?S.name, StateName, queue_length(NewState), Reason]),
     % Notify all senders that the notifications will not be sent.
     _ = [failure_callback(N, terminated) || N <- queue:to_list(State#?S.queue)],
     % Cleanup all we can.
-    _ = terminate_queue(terminate_history(stop_feedback(NewState))),
+    terminate_queue(terminate_history(stop_feedback(NewState))),
     % Notify the process wanting us dead.
     _ = [gen_fsm:reply(C, ok) || C <- WaitingCallers],
     ok.
@@ -610,15 +631,15 @@ connecting({send, Expiry, Token, JSON, Prio}, State) ->
 
 connecting(connect, State) ->
     #?S{name = Name, host = Host, port = Port, ssl_opts = Opts} = State,
-    _ = lager:info("APNS session ~p connecting to ~s:~w", [Name, Host, Port]),
+    lager:info("APNS session ~p connecting to ~s:~w", [Name, Host, Port]),
     case apns_connect(Host, Port, Opts) of
         {ok, Socket} ->
-            _ = lager:info("APNS session ~p connected to ~s:~w "
-                           "on SSL socket ~p", [Name, Host, Port, Socket]),
+            lager:info("APNS session ~p connected to ~s:~w on SSL socket ~p",
+                       [Name, Host, Port, Socket]),
             next(connecting, connected, State#?S{sock = Socket});
         {error, Reason} ->
-            _ = lager:error("APNS session ~p failed to connect to ~s:~w : ~p",
-                            [Name, Host, Port, Reason]),
+            lager:error("APNS session ~p failed to connect to ~s:~w : ~p",
+                        [Name, Host, Port, Reason]),
             next(connecting, connecting, State)
     end;
 
@@ -684,8 +705,8 @@ disconnecting(disconnect, State) ->
     continue(disconnecting, State);
 
 disconnecting(timeout, State) ->
-    _ = lager:warning("APNS session ~p was forced to close SSL socket ~p",
-                      [State#?S.name, State#?S.sock]),
+    lager:warning("APNS session ~p was forced to close the SSL socket ~p",
+                  [State#?S.name, State#?S.sock]),
     handle_connection_closure(disconnecting, State);
 
 disconnecting(Event, State) ->
@@ -706,60 +727,51 @@ disconnecting(Event, From, State) ->
 
 %% This returns {continue, State} when we expect APNS to disconnect us.
 %% It only returns {disconnect, State} if we want to disconnect ourselves.
--spec process_apns_resp(Data, State) -> Result when
-      Data :: binary(), State :: state(),
-      Result :: {'continue'|'disconnect', NewState},
-      NewState :: state().
 process_apns_resp(Data, State) ->
     #?S{name = Name, checkpoint_seq = CheckpointSeq} = State,
-    case apns_decode_error_packet(Data) of
+    case apns_decode_message(Data) of
         ok ->
             {continue, State};
         {error, Reason} ->
-            _ = lager:error("APNS session ~p failed decoding message: ~p",
-                            [Name, Reason]),
+            lager:error("APNS session ~p failed decoding message: ~p",
+                        [Name, Reason]),
             {disconnect, State};
         {bad_nf, invalid_token, CheckpointSeq} ->
-            _ = lager:info("APNS session ~p confirmed "
-                           "reception of checkpoint ~w",
-                           [Name, CheckpointSeq]),
+            lager:info("APNS session ~p confirmed reception of checkpoint ~w",
+                       [Name, CheckpointSeq]),
             {continue, recover_history_after(CheckpointSeq, State)};
         {bad_nf, Status, Seq} ->
             case {Status, history_get(Seq, State)} of
                 {_, undefined} ->
-                    _ = lager:error("APNS session ~p received an error ~p for "
-                                    "the unknown notification ~w",
-                                    [Name, Status, Seq]),
+                    lager:error("APNS session ~p received an error ~p for "
+                                "the unknown notification ~w",
+                                [Name, Status, Seq]),
                     {continue, State};
                 {invalid_token, #nf{token = Token} = Nf} ->
-                    _ = lager:error("APNS session ~p has been notified that the"
-                                    " notification ~w with token ~s is invalid",
-                                    [Name, Seq, tok_s(Token)]),
-                    _ = apns_deregister_token(Token),
-                    _ = failure_callback(Nf, Status),
+                    lager:error("APNS session ~p has been notified that the "
+                                "notification ~w with token ~s is invalid",
+                                [Name, Seq, tok_s(Token)]),
+                    apns_deregister_token(Token),
+                    failure_callback(Nf, Status),
                     {continue, recover_history_after(Seq, State)};
                 {shutdown, #nf{token = Token}} ->
-                    _ = lager:warning("APNS reported it is shutting down this "
-                                      "connection so we need to disconnect"
-                                      " and reconnect. The last notification"
-                                      " delivered successfully is seq ~w with"
-                                      " token ~s", [Seq, tok_s(Token)]),
+                    lager:warning("APNS reported it is shutting down this "
+                                  "connection so we need to disconnect and "
+                                  "reconnect. The last notification delivered "
+                                  "successfully is seq ~w with token ~s",
+                                  [Seq, tok_s(Token)]),
                     %% We must disconnect and redeliver all notifications after Seq.
                     %% This isn't a failure, so no failure callback.
                     {disconnect, recover_history_after(Seq, State)};
                 {_, #nf{} = Nf} ->
-                    _ = lager:error("APNS session ~p received error ~p "
-                                    "for the notification ~w",
-                                    [Name, Status, Seq]),
-                    _ = failure_callback(Nf, Status),
+                    lager:error("APNS session ~p received error ~p for the "
+                                "notification ~w", [Name, Status, Seq]),
+                    failure_callback(Nf, Status),
                     {continue, recover_history_after(Seq, State)}
             end
     end.
 
 
--spec flush_queued_notifications(State) -> Result when
-      State :: state(), Result :: {ok, NewState} | {error, NewState},
-      NewState :: state().
 flush_queued_notifications(#?S{queue = Queue} = State) ->
     Now = sc_util:posix_time(),
     case queue:out(Queue) of
@@ -774,8 +786,8 @@ flush_queued_notifications(#?S{queue = Queue} = State) ->
                     flush_queued_notifications(NewState)
             end;
         {{value, #nf{} = Nf}, NewQueue} ->
-            _ = lager:debug("Notification ~p with token ~s expired",
-                            [Nf#nf.seq, tok_s(Nf)]),
+            lager:debug("Notification ~p with token ~s expired",
+                        [Nf#nf.seq, tok_s(Nf)]),
             failure_callback(Nf, expired),
             flush_queued_notifications(State#?S{queue = NewQueue})
     end.
@@ -791,9 +803,9 @@ send_notification(#nf{seq = Seq} = Nf, State) ->
         ok ->
             {ok, Seq, history_put(Nf, State)};
         {error, Reason} ->
-            _ = lager:error("APNS session ~p failed to send notification ~w "
-                            "with token ~s: ~p",
-                            [State#?S.name, Seq, tok_s(Nf), Reason]),
+            lager:error("APNS session ~p failed to send notification ~w with "
+                        "token ~s: ~p",
+                        [State#?S.name, Seq, tok_s(Nf), Reason]),
             {error, Seq, recover_notification(Nf, State)}
     end.
 
@@ -985,20 +997,21 @@ init_state(Name, Opts) ->
     CheckpointPeriod = validate_checkpoint_period(Opts),
     CheckpointMax = validate_checkpoint_max(Opts),
     CloseTimeout = validate_close_timeout(Opts),
+    FeedbackEnabled = feedback_enabled(Opts),
     FeedbackName = feedback_name(Name),
     FeedbackOpts = feedback_options(Opts),
 
-    _ = lager:debug("With options: host=~p, port=~w, "
-                    "retry_delay=~w, retry_max=~p, "
-                    "checkpoint_period=~w, checkpoint_max=~w, "
-                    "close_timeout=~p, fake_token=~p, "
-                    "bundle_seed_id=~p, bundle_id=~p",
-                    [Host, Port,
-                     RetryDelay, RetryMax,
-                     CheckpointPeriod, CheckpointMax,
-                     CloseTimeout, FakeToken,
-                     BundleSeedId, BundleId]),
-    _ = lager:debug("With SSL options: ~s", [format_props(SslOpts)]),
+    lager:debug("With options: host=~p, port=~w, "
+                "retry_delay=~w, retry_max=~p, "
+                "checkpoint_period=~w, checkpoint_max=~w, "
+                "close_timeout=~p, fake_token=~p, "
+                "bundle_seed_id=~p, bundle_id=~p",
+                [Host, Port,
+                 RetryDelay, RetryMax,
+                 CheckpointPeriod, CheckpointMax,
+                 CloseTimeout, FakeToken,
+                 BundleSeedId, BundleId]),
+    lager:debug("With SSL options: ~s", [format_props(SslOpts)]),
 
     #?S{name = Name,
         host = Host,
@@ -1012,6 +1025,7 @@ init_state(Name, Opts) ->
         checkpoint_period = CheckpointPeriod,
         checkpoint_max = CheckpointMax,
         close_timeout = CloseTimeout,
+        feedback_enabled = FeedbackEnabled,
         feedback_name = FeedbackName,
         feedback_opts = FeedbackOpts}.
 
@@ -1022,6 +1036,8 @@ init_state(Name, Opts) ->
 
 validate_ssl_opts(Opts, BundleSeedId, BundleId) ->
     SslOpts = pv_req(ssl_opts, Opts),
+    DontValidateApnsCert = validate_boolean_opt(disable_apns_cert_validation,
+                                                Opts, false),
     case pv(certfile, SslOpts) of
         undefined ->
             throw(missing_certfile_option);
@@ -1029,6 +1045,8 @@ validate_ssl_opts(Opts, BundleSeedId, BundleId) ->
             case file:read_file(CertPath) of
                 {error, Reason} ->
                     throw({bad_cert_path, Reason});
+                {ok, _Bin} when DontValidateApnsCert == true ->
+                    SslOpts;
                 {ok, Bin} ->
                     case apns_cert:validate(Bin, BundleSeedId, BundleId) of
                         ok -> SslOpts;
@@ -1036,6 +1054,24 @@ validate_ssl_opts(Opts, BundleSeedId, BundleId) ->
                             throw({bad_cert, Reason})
                     end
             end
+    end.
+
+-spec validate_boolean_opt(Name, Opts, Default) -> Value
+    when Name :: atom(), Opts :: proplists:proplist(),
+         Default :: boolean(), Value :: boolean().
+
+validate_boolean_opt(Name, Opts, Default) ->
+    validate_boolean(Name, pv(Name, Opts, Default)).
+
+-spec validate_boolean(Name, Value) -> Value
+    when Name :: atom(), Value :: boolean().
+
+validate_boolean(Name, Bool) ->
+    case is_boolean(Bool) of
+        true ->
+            Bool;
+        false ->
+            throw({bad_options, {not_a_boolean, Name}})
     end.
 
 
@@ -1308,8 +1344,8 @@ send_checkpoint(#?S{sock = Socket} = State) ->
 schedule_reconnect(#?S{retry_ref = Ref} = State) ->
     catch erlang:cancel_timer(Ref),
     {Delay, NewState} = next_delay(State),
-    _ = lager:info("APNS session ~p will reconnect in ~w ms",
-                   [State#?S.name, Delay]),
+    lager:info("APNS session ~p will reconnect in ~w ms",
+               [State#?S.name, Delay]),
     NewRef = gen_fsm:send_event_after(Delay, connect),
     NewState#?S{retry_ref = NewRef}.
 
@@ -1353,6 +1389,8 @@ cancel_closure_timeout(#?S{close_ref = Ref} = State) ->
 %%% APNS Feedback Functions
 %%% --------------------------------------------------------------------------
 
+start_feedback(#?S{feedback_enabled = false} = State) ->
+    State;
 start_feedback(#?S{feedback_pid = undefined} = State) ->
     #?S{feedback_name = Name, feedback_opts = Opts} = State,
     case apns_erl_feedback_session:start_link(Name, Opts) of
@@ -1363,10 +1401,15 @@ start_feedback(#?S{feedback_pid = undefined} = State) ->
     end.
 
 
+stop_feedback(#?S{feedback_enabled = false} = State) ->
+    State#?S{feedback_pid = undefined};
 stop_feedback(#?S{feedback_pid = Pid} = State) when is_pid(Pid) ->
     apns_erl_feedback_session:stop(Pid),
     State#?S{feedback_pid = undefined}.
 
+
+feedback_enabled(Opts) ->
+    validate_boolean_opt(feedback_enabled, Opts, false).
 
 feedback_name(Name) ->
     list_to_atom("fb-" ++ atom_to_list(Name)).
@@ -1433,29 +1476,21 @@ apns_send(Sock, Nf) when Sock =/= undefined ->
     end.
 
 
--spec apns_decode_error_packet(Data) -> Result when
-      Data :: binary(),
-      Result :: ok | {bad_nf, Status, Seq} | {error, binary()},
-      Status :: atom(), Seq :: integer().
-apns_decode_error_packet(Data) ->
+apns_decode_message(Data) ->
     case apns_lib:decode_error_packet(Data) of
         {error, Reason} ->
             {error, format("Error decoding packet (~p)", [Reason])};
         Rec ->
             case apns_recs:'#is_record-'(apns_error, Rec) of
                 true ->
-                    apns_decode_error_rec(Rec);
+                    apns_decode_record(Rec);
                 false ->
                     {error, format("Expected error packet and got ~p", [Rec])}
             end
     end.
 
 
--spec apns_decode_error_rec(Rec) -> Result when
-      Rec :: tuple(),
-      Result :: ok | {bad_nf, Status, Seq} | {error, binary()},
-      Status :: atom(), Seq :: integer().
-apns_decode_error_rec(Rec) ->
+apns_decode_record(Rec) ->
     case apns_recs:'#get-apns_error'(status, Rec) of
         ok -> ok;
         _Error ->
@@ -1464,18 +1499,11 @@ apns_decode_error_rec(Rec) ->
     end.
 
 
--spec apns_rec_to_props(RecName, Rec) -> Result when
-      RecName :: atom(), Rec :: tuple(),
-      Result :: [proplists:property()].
 apns_rec_to_props(RecName, Rec) ->
     Fields = apns_recs:'#info-'(RecName),
     lists:zip(Fields, apns_recs:'#get-'(Fields, Rec)).
 
 
--spec apns_decode_error(Props) -> Result when
-      Props :: [proplists:property()],
-      Result :: {bad_nf, Status, Seq} | {error, binary()},
-      Status :: atom(), Seq :: integer().
 apns_decode_error(Props) ->
     Status = pv(status, Props),
     case pv(id, Props) of
@@ -1486,18 +1514,16 @@ apns_decode_error(Props) ->
     end.
 
 
--spec apns_deregister_token(Token) -> 'ok' when
-      Token :: binary().
 apns_deregister_token(Token) ->
     SvcTok = sc_push_reg_api:make_svc_tok(apns, Token),
     ok = sc_push_reg_api:deregister_svc_tok(SvcTok).
 
 -spec tok_s(Token) -> BStr
-    when Token :: nf() | binary(), BStr :: bstrtok().
+    when Token :: nf() | binary() | string(), BStr :: bstrtok().
 tok_s(#nf{token = Token}) ->
     tok_s(sc_util:to_bin(Token));
+tok_s(Token) when is_list(Token) ->
+    tok_s(sc_util:to_bin(Token));
 tok_s(<<Token/binary>>) ->
-    list_to_binary(sc_util:bitstring_to_hex(
-                     apns_lib:maybe_encode_token(Token)
-                    )).
+    list_to_binary(sc_util:bitstring_to_hex(apns_lib:maybe_encode_token(Token))).
 

@@ -1,14 +1,7 @@
-ebin/
-deps/
-.test
 .*.sw?
 test/*.beam
 doc/*.html
 doc/edoc-info
 doc/erlang.png
 doc/stylesheet.css
-logs/
-html/
-.rebar/
-.deps_plt
-errs
+_build
