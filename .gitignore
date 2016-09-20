@@ -7,3 +7,5 @@ doc/stylesheet.css
 _buildrebar3
 _build
 rebar3
+.rebar3/
+ebin/

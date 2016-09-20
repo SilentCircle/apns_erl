@@ -1,5 +1,5 @@
 %%% ==========================================================================
-%%% Copyright 2012-2016 Silent Circle
+%%% Copyright 2015 Silent Circle
 %%%
 %%% Licensed under the Apache License, Version 2.0 (the "License");
 %%% you may not use this file except in compliance with the License.
@@ -50,14 +50,17 @@
                 {error, Reason},
       Node :: node(), Pid :: pid(), State :: term(), Reason :: term().
 start(_StartType, _StartArgs) ->
-    {ok, App} = application:get_application(?MODULE),
-    Opts = application:get_all_env(App),
-    _ = lager:info("Starting app ~p with opts: ~p", [App, Opts]),
-    Sessions = sc_util:req_val(sessions, Opts),
-    Service = sc_util:req_val(service, Opts),
+    Cfg = get_config(),
+    {App, Opts, Sessions, Service} = Cfg,
+    _ = case check_config(Cfg) of
+            true ->
+                lager:info("Starting app ~p with opts: ~p", [App, Opts]);
+            false ->
+                lager:warning("No config found; starting inactive service")
+        end,
     case sc_push_svc_apns:start_link(Sessions) of
         {ok, _} = Res ->
-            ok = sc_push_lib:register_service(Service),
+            register_service(Service),
             Res;
         Err ->
             Err
@@ -72,15 +75,71 @@ start(_StartType, _StartArgs) ->
 %%--------------------------------------------------------------------
 -spec stop(State) -> 'ok' when State :: term().
 stop(_State) ->
+    {_App, _Opts, _Sessions, Service} = get_config(),
     _ = try
-        {ok, App} = application:get_application(?MODULE),
-        Opts = application:get_all_env(App),
-        Service = sc_util:req_val(service, Opts),
-        SvcName = sc_util:req_val(name, Service),
-        sc_push_lib:unregister_service(SvcName)
-    catch
-        Class:Reason ->
-            lager:error("Unable to deregister apns service: ~p",
-                        [{Class, Reason}])
-    end,
+            unregister_service(Service)
+        catch
+            Class:Reason ->
+                lager:error("Unable to deregister apns service: ~p",
+                            [{Class, Reason}])
+        end,
     ok.
+
+%%--------------------------------------------------------------------
+%% @doc Get sessions and service
+%% @end
+%%--------------------------------------------------------------------
+get_config() ->
+    case application:get_application(?MODULE) of
+        {ok, App} ->
+            Opts = application:get_all_env(App),
+            Sessions = sc_util:val(sessions, Opts, []),
+            Service = sc_util:val(service, Opts, undefined),
+            {App, Opts, Sessions, Service};
+        undefined ->
+            lager:warning("No environment for ~p", [?MODULE]),
+            {{error, undefined}, [], [], undefined}
+    end.
+
+
+%%--------------------------------------------------------------------
+register_service(undefined) ->
+    ok;
+register_service(Service) ->
+    ok = sc_push_lib:register_service(Service).
+
+%%--------------------------------------------------------------------
+unregister_service(undefined) ->
+    ok;
+unregister_service(Service) ->
+    case sc_util:val(name, Service, undefined) of
+        undefined ->
+            ok;
+        SvcName ->
+            sc_push_lib:unregister_service(SvcName)
+    end.
+
+check_config({App, _Opts, Sessions, Service}) ->
+    check_app(App) and
+    check_sessions(Sessions) and
+    check_service(Service).
+
+check_app(App) ->
+    maybe_do(fun() -> App /= {error, undefined} end,
+             fun() -> lager:warning("No app found") end).
+
+check_sessions(Sessions) ->
+    maybe_do(fun() -> is_list(Sessions) andalso Sessions /= [] end,
+             fun() -> lager:warning("No sessions found") end).
+
+check_service(Service) ->
+    maybe_do(fun() -> Service /= undefined end,
+             fun() -> lager:warning("No service found") end).
+
+maybe_do(Pred, Fun) when is_function(Pred, 0),
+                         is_function(Fun, 0) ->
+    case Pred() of
+        true -> true;
+        false -> _ = Fun(), false
+    end.
+

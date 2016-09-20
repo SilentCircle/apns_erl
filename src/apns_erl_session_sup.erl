@@ -1,5 +1,5 @@
 %%% ==========================================================================
-%%% Copyright 2012-2016 Silent Circle
+%%% Copyright 2015 Silent Circle
 %%%
 %%% Licensed under the Apache License, Version 2.0 (the "License");
 %%% you may not use this file except in compliance with the License.
@@ -13,6 +13,14 @@
 %%% See the License for the specific language governing permissions and
 %%% limitations under the License.
 %%% ==========================================================================
+
+%%%-------------------------------------------------------------------
+%%% @author Edwin Fine <efine@silentcircle.com>
+%%% @copyright 2015 Silent Circle
+%%% @doc
+%%% APNS session supervisor.
+%%% @end
+%%%-------------------------------------------------------------------
 -module(apns_erl_session_sup).
 
 -behaviour(supervisor).
@@ -34,64 +42,118 @@
 -define(SERVER, ?MODULE).
 
 %% ===================================================================
+%% Types
+%% ===================================================================
+-type proplist() :: [proplists:property()].
+-type session_props() :: proplist().
+-type startlink_ret() :: {ok, pid()} |
+                         ignore |
+                         {error, startlink_err()}.
+-type startlink_err() :: {already_started, pid()} |
+                         {shutdown, term()}       |
+                         term().
+-type child() :: undefined | pid().
+-type child_id() :: term(). % Not a pid().
+-type mfargs() :: {M :: module(), F :: atom(), A :: [term()] | undefined}.
+-type modules() :: [module()] | dynamic.
+-type restart() :: permanent | transient | temporary.
+-type shutdown() :: brutal_kill | timeout().
+-type strategy() :: one_for_all |
+                    one_for_one |
+                    rest_for_one |
+                    simple_one_for_one.
+-type sup_ref() :: (Name :: atom())
+                 | {Name :: atom(), Node :: node()}
+                 | {global, Name :: atom()}
+                 | {via, Module :: module(), Name :: any()}
+                 | pid().
+-type worker() :: worker | supervisor.
+-type child_spec() :: {Id :: child_id(),
+                       StartFunc :: mfargs(),
+                       Restart :: restart(),
+                       Shutdown :: shutdown(),
+                       Type :: worker(),
+                       Modules :: modules()}.
+-type startchild_err() :: already_present
+                          | {already_started, Child :: child()}
+                          | term().
+-type startchild_ret() :: {ok, Child :: child()}
+                        | {ok, Child :: child(), Info :: term()}
+                        | {error, startchild_err()}.
+
+%% ===================================================================
 %% API functions
 %% ===================================================================
 
-%% @doc `Sessions' is a list of sessions to start. Each session is a
-%% proplist as shown.
+%%-------------------------------------------------------------------
+%% @doc Start APNS sessions.
 %%
-%% @deprecated Use the HTTP/2 application, `apns_erlv3'.
-%%
-%% == Example for APNS Binary API (Deprecated) ==
+%% `Sessions' is a list of proplists and looks like this:
 %%
 %% ```
-%% Sessions = [
+%% [
 %%     [
-%%         {name, 'apns-com.example.MyApp'},
+%%         {name, 'apns-com.example.Example'},
 %%         {config, [
 %%             {host, "gateway.sandbox.push.apple.com"},
 %%             {port, 2195},
-%%             {bundle_seed_id, <<"com.example.MyApp">>},
-%%             {bundle_id, <<"com.example.MyApp">>},
-%%             {feedback_enabled, false},
+%%             {bundle_seed_id, <<"com.example.Example">>},
+%%             {bundle_id, <<"com.example.Example">>},
 %%             {fake_token, <<"XXXXXX">>},
 %%             {retry_delay, 1000},
 %%             {checkpoint_period, 60000},
 %%             {checkpoint_max, 10000},
 %%             {close_timeout, 5000},
-%%             {disable_apns_cert_validation, false},
 %%             {ssl_opts, [
-%%                     {certfile, "/etc/somewhere/certs/com.example.MyApp.cert.pem"},
-%%                     {keyfile, "/etc/somewhere/certs/com.example.MyApp.key.unencrypted.pem"},
-%%                     {versions, ['tlsv1']} % Fix for SSL issue http://erlang.org/pipermail/erlang-questions/2015-June/084935.html
+%%                     {certfile, "/etc/somewhere/certs/com.example.Example--DEV.cert.pem"},
+%%                     {keyfile, "/etc/somewhere/certs/com.example.Example--DEV.key.unencrypted.pem"}
 %%                 ]
 %%             }
 %%          ]}
 %%     ] %, ...
-%% ].
+%% ]
 %% '''
 %%
 %% @end
+%%-------------------------------------------------------------------
+
+%%-------------------------------------------------------------------
+-spec start_link(Sessions) -> startlink_ret() when
+      Sessions :: [session_props()].
 start_link(Sessions) when is_list(Sessions) ->
     case supervisor:start_link({local, ?SERVER}, ?MODULE, []) of
         {ok, _Pid} = Res ->
             % Start children
-            [{ok, _} = start_child(Opts) || Opts <- Sessions],
+            _ = [{ok, _} = start_child(Opts) || Opts <- Sessions],
             Res;
         Error ->
             Error
     end.
 
+%%-------------------------------------------------------------------
 %% @doc Start a child session.
+%%
 %% == Parameters ==
+%%
 %% <ul>
 %%  <li>`Name' - Session name (atom)</li>
 %%  <li>`Opts' - Options, see {@link apns_erl_session} for more details</li>
 %% </ul>
+%%
 %% @end
+%%-------------------------------------------------------------------
+-spec start_child(Name, Opts) -> Result when
+      Name :: atom(), Opts :: proplist(), Result :: startchild_ret().
 start_child(Name, Opts) when is_atom(Name), is_list(Opts) ->
     supervisor:start_child(?SERVER, [Name, Opts]).
 
+%%-------------------------------------------------------------------
+%% @doc Stop child session.
+%% @end
+%%-------------------------------------------------------------------
+-spec stop_child(Name) -> Result when
+      Name :: atom(), Result :: ok | {error, Error},
+      Error :: not_found | simple_one_for_one.
 stop_child(Name) when is_atom(Name) ->
     case get_child_pid(Name) of
         Pid when is_pid(Pid) ->
@@ -100,9 +162,19 @@ stop_child(Name) when is_atom(Name) ->
             {error, not_started}
     end.
 
+%%-------------------------------------------------------------------
+%% @doc Test if child is alive.
+%% @end
+%%-------------------------------------------------------------------
+-spec is_child_alive(Name) -> boolean() when Name :: atom().
 is_child_alive(Name) when is_atom(Name) ->
     get_child_pid(Name) =/= undefined.
 
+%%-------------------------------------------------------------------
+%% @doc Get a child's pid.
+%% @end
+%%-------------------------------------------------------------------
+-spec get_child_pid(Name) -> pid() | undefined when Name :: atom().
 get_child_pid(Name) when is_atom(Name) ->
     erlang:whereis(Name).
 
@@ -129,7 +201,7 @@ init([]) ->
 %% Internal Functions
 %%--------------------------------------------------------------------
 start_child(Opts) ->
-    lager:info("Starting APNS session with opts: ~p", [Opts]),
+    _ = lager:info("Starting APNS session with opts: ~p", [Opts]),
     Name = sc_util:req_val(name, Opts),
     SessCfg = sc_util:req_val(config, Opts),
     start_child(Name, SessCfg).
