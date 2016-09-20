@@ -62,11 +62,6 @@
                     one_for_one |
                     rest_for_one |
                     simple_one_for_one.
--type sup_ref() :: (Name :: atom())
-                 | {Name :: atom(), Node :: node()}
-                 | {global, Name :: atom()}
-                 | {via, Module :: module(), Name :: any()}
-                 | pid().
 -type worker() :: worker | supervisor.
 -type child_spec() :: {Id :: child_id(),
                        StartFunc :: mfargs(),
@@ -182,15 +177,12 @@ get_child_pid(Name) when is_atom(Name) ->
 %% Supervisor callbacks
 %% ===================================================================
 
+-spec init(Args) -> Result when
+      Args :: term(), Result :: {ok, {{Strategy, MaxR, MaxT}, Children}},
+      Strategy :: strategy(), MaxR :: non_neg_integer(),
+      MaxT :: pos_integer(), Children :: [child_spec()].
 init([]) ->
-    Session = {
-        apns_erl_session,
-        {apns_erl_session, start_link, []},
-        transient,
-        brutal_kill,
-        worker,
-        [apns_erl_session]
-    },
+    Session = make_one_for_one_child(),
     Children = [Session],
     MaxR = 20,
     MaxT = 20,
@@ -206,3 +198,13 @@ start_child(Opts) ->
     SessCfg = sc_util:req_val(config, Opts),
     start_child(Name, SessCfg).
 
+-spec make_one_for_one_child() -> child_spec().
+make_one_for_one_child() ->
+    {
+        apns_erl_session,
+        {apns_erl_session, start_link, []},
+        transient,
+        brutal_kill,
+        worker,
+        [apns_erl_session]
+    }.

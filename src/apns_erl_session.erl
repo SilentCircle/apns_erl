@@ -1466,13 +1466,10 @@ apns_connect(Host, Port, SslOpts) ->
 
 apns_send(Sock, Nf) when Sock =/= undefined ->
     #nf{seq = Seq, expiry = Exp, token = Token, json = JSON, prio = Prio} = Nf,
-    case apns_lib:encode_v2(Seq, Exp, Token, JSON, Prio) of
+    <<Packet/binary>> = apns_lib:encode_v2(Seq, Exp, Token, JSON, Prio),
+    case ssl:send(Sock, Packet) of
         {error, _Reason} = Error -> Error;
-        <<Packet/binary>> ->
-            case ssl:send(Sock, Packet) of
-                {error, _Reason} = Error -> Error;
-                ok -> ok
-            end
+        ok -> ok
     end.
 
 

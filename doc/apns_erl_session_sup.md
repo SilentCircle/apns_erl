@@ -1,17 +1,180 @@
 
 
 # Module apns_erl_session_sup #
+* [Description](#description)
+* [Data Types](#types)
 * [Function Index](#index)
 * [Function Details](#functions)
 
+APNS session supervisor.
+
+Copyright (c) 2015 Silent Circle
+
 __Behaviours:__ [`supervisor`](supervisor.md).
+
+__Authors:__ Edwin Fine ([`efine@silentcircle.com`](mailto:efine@silentcircle.com)).
+
+<a name="types"></a>
+
+## Data Types ##
+
+
+
+
+### <a name="type-child">child()</a> ###
+
+
+<pre><code>
+child() = undefined | pid()
+</code></pre>
+
+
+
+
+### <a name="type-child_id">child_id()</a> ###
+
+
+<pre><code>
+child_id() = term()
+</code></pre>
+
+Not a pid().
+
+
+
+### <a name="type-child_spec">child_spec()</a> ###
+
+
+<pre><code>
+child_spec() = {Id::<a href="#type-child_id">child_id()</a>, StartFunc::<a href="#type-mfargs">mfargs()</a>, Restart::<a href="#type-restart">restart()</a>, Shutdown::<a href="#type-shutdown">shutdown()</a>, Type::<a href="#type-worker">worker()</a>, Modules::<a href="#type-modules">modules()</a>}
+</code></pre>
+
+
+
+
+### <a name="type-mfargs">mfargs()</a> ###
+
+
+<pre><code>
+mfargs() = {M::module(), F::atom(), A::[term()] | undefined}
+</code></pre>
+
+
+
+
+### <a name="type-modules">modules()</a> ###
+
+
+<pre><code>
+modules() = [module()] | dynamic
+</code></pre>
+
+
+
+
+### <a name="type-proplist">proplist()</a> ###
+
+
+<pre><code>
+proplist() = [<a href="proplists.md#type-property">proplists:property()</a>]
+</code></pre>
+
+
+
+
+### <a name="type-restart">restart()</a> ###
+
+
+<pre><code>
+restart() = permanent | transient | temporary
+</code></pre>
+
+
+
+
+### <a name="type-session_props">session_props()</a> ###
+
+
+<pre><code>
+session_props() = <a href="#type-proplist">proplist()</a>
+</code></pre>
+
+
+
+
+### <a name="type-shutdown">shutdown()</a> ###
+
+
+<pre><code>
+shutdown() = brutal_kill | timeout()
+</code></pre>
+
+
+
+
+### <a name="type-startchild_err">startchild_err()</a> ###
+
+
+<pre><code>
+startchild_err() = already_present | {already_started, Child::<a href="#type-child">child()</a>} | term()
+</code></pre>
+
+
+
+
+### <a name="type-startchild_ret">startchild_ret()</a> ###
+
+
+<pre><code>
+startchild_ret() = {ok, Child::<a href="#type-child">child()</a>} | {ok, Child::<a href="#type-child">child()</a>, Info::term()} | {error, <a href="#type-startchild_err">startchild_err()</a>}
+</code></pre>
+
+
+
+
+### <a name="type-startlink_err">startlink_err()</a> ###
+
+
+<pre><code>
+startlink_err() = {already_started, pid()} | {shutdown, term()} | term()
+</code></pre>
+
+
+
+
+### <a name="type-startlink_ret">startlink_ret()</a> ###
+
+
+<pre><code>
+startlink_ret() = {ok, pid()} | ignore | {error, <a href="#type-startlink_err">startlink_err()</a>}
+</code></pre>
+
+
+
+
+### <a name="type-strategy">strategy()</a> ###
+
+
+<pre><code>
+strategy() = one_for_all | one_for_one | rest_for_one | simple_one_for_one
+</code></pre>
+
+
+
+
+### <a name="type-worker">worker()</a> ###
+
+
+<pre><code>
+worker() = worker | supervisor
+</code></pre>
 
 <a name="index"></a>
 
 ## Function Index ##
 
 
-<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#get_child_pid-1">get_child_pid/1</a></td><td></td></tr><tr><td valign="top"><a href="#init-1">init/1</a></td><td></td></tr><tr><td valign="top"><a href="#is_child_alive-1">is_child_alive/1</a></td><td></td></tr><tr><td valign="top"><a href="#start_child-2">start_child/2</a></td><td>Start a child session.</td></tr><tr><td valign="top"><a href="#start_link-1">start_link/1</a></td><td>(<em>Deprecated</em>.) <code>Sessions</code> is a list of sessions to start.</td></tr><tr><td valign="top"><a href="#stop_child-1">stop_child/1</a></td><td></td></tr></table>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#get_child_pid-1">get_child_pid/1</a></td><td>Get a child's pid.</td></tr><tr><td valign="top"><a href="#init-1">init/1</a></td><td></td></tr><tr><td valign="top"><a href="#is_child_alive-1">is_child_alive/1</a></td><td>Test if child is alive.</td></tr><tr><td valign="top"><a href="#start_child-2">start_child/2</a></td><td>Start a child session.</td></tr><tr><td valign="top"><a href="#start_link-1">start_link/1</a></td><td>Start APNS sessions.</td></tr><tr><td valign="top"><a href="#stop_child-1">stop_child/1</a></td><td>Stop child session.</td></tr></table>
 
 
 <a name="functions"></a>
@@ -22,84 +185,105 @@ __Behaviours:__ [`supervisor`](supervisor.md).
 
 ### get_child_pid/1 ###
 
-`get_child_pid(Name) -> any()`
+<pre><code>
+get_child_pid(Name) -&gt; pid() | undefined
+</code></pre>
+
+<ul class="definitions"><li><code>Name = atom()</code></li></ul>
+
+Get a child's pid.
 
 <a name="init-1"></a>
 
 ### init/1 ###
 
-`init(X1) -> any()`
+<pre><code>
+init(Args) -&gt; Result
+</code></pre>
+
+<ul class="definitions"><li><code>Args = term()</code></li><li><code>Result = {ok, {{Strategy, MaxR, MaxT}, Children}}</code></li><li><code>Strategy = <a href="#type-strategy">strategy()</a></code></li><li><code>MaxR = non_neg_integer()</code></li><li><code>MaxT = pos_integer()</code></li><li><code>Children = [<a href="#type-child_spec">child_spec()</a>]</code></li></ul>
 
 <a name="is_child_alive-1"></a>
 
 ### is_child_alive/1 ###
 
-`is_child_alive(Name) -> any()`
+<pre><code>
+is_child_alive(Name) -&gt; boolean()
+</code></pre>
+
+<ul class="definitions"><li><code>Name = atom()</code></li></ul>
+
+Test if child is alive.
 
 <a name="start_child-2"></a>
 
 ### start_child/2 ###
 
-`start_child(Name, Opts) -> any()`
+<pre><code>
+start_child(Name, Opts) -&gt; Result
+</code></pre>
+
+<ul class="definitions"><li><code>Name = atom()</code></li><li><code>Opts = <a href="#type-proplist">proplist()</a></code></li><li><code>Result = <a href="#type-startchild_ret">startchild_ret()</a></code></li></ul>
 
 Start a child session.
 
 
 ### <a name="Parameters">Parameters</a> ###
 
-
 * `Name` - Session name (atom)
 
 * `Opts` - Options, see [`apns_erl_session`](apns_erl_session.md) for more details
+
 
 
 <a name="start_link-1"></a>
 
 ### start_link/1 ###
 
-`start_link(Sessions) -> any()`
+<pre><code>
+start_link(Sessions) -&gt; <a href="#type-startlink_ret">startlink_ret()</a>
+</code></pre>
 
-__This function is deprecated:__
+<ul class="definitions"><li><code>Sessions = [<a href="#type-session_props">session_props()</a>]</code></li></ul>
 
-Use the HTTP/2 application, `apns_erlv3`.
+Start APNS sessions.
 
-
-### <a name="Example_for_APNS_Binary_API_(Deprecated)">Example for APNS Binary API (Deprecated)</a> ###
+`Sessions` is a list of proplists and looks like this:
 
 ```
-  Sessions = [
+  [
       [
-          {name, 'apns-com.example.MyApp'},
+          {name, 'apns-com.example.Example'},
           {config, [
               {host, "gateway.sandbox.push.apple.com"},
               {port, 2195},
-              {bundle_seed_id, <<"com.example.MyApp">>},
-              {bundle_id, <<"com.example.MyApp">>},
-              {feedback_enabled, false},
+              {bundle_seed_id, <<"com.example.Example">>},
+              {bundle_id, <<"com.example.Example">>},
               {fake_token, <<"XXXXXX">>},
               {retry_delay, 1000},
               {checkpoint_period, 60000},
               {checkpoint_max, 10000},
               {close_timeout, 5000},
-              {disable_apns_cert_validation, false},
               {ssl_opts, [
-                      {certfile, "/etc/somewhere/certs/com.example.MyApp.cert.pem"},
-                      {keyfile, "/etc/somewhere/certs/com.example.MyApp.key.unencrypted.pem"},
-                      {versions, ['tlsv1']} % Fix for SSL issue http://erlang.org/pipermail/erlang-questions/2015-June/084935.html
+                      {certfile, "/etc/somewhere/certs/com.example.Example--DEV.cert.pem"},
+                      {keyfile, "/etc/somewhere/certs/com.example.Example--DEV.key.unencrypted.pem"}
                   ]
               }
            ]}
       ] %, ...
-  ].
+  ]
 ```
 
-
-`Sessions` is a list of sessions to start. Each session is a
-proplist as shown.
 
 <a name="stop_child-1"></a>
 
 ### stop_child/1 ###
 
-`stop_child(Name) -> any()`
+<pre><code>
+stop_child(Name) -&gt; Result
+</code></pre>
+
+<ul class="definitions"><li><code>Name = atom()</code></li><li><code>Result = ok | {error, Error}</code></li><li><code>Error = not_found | simple_one_for_one</code></li></ul>
+
+Stop child session.
 
