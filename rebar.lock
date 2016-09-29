@@ -1,6 +1,6 @@
 [{<<"apns_erl_util">>,
   {git,"git@github.com:SilentCircle/apns_erl_util.git",
-       {ref,"cd965638f43fa3c73e601c701f353a0ccd8dea88"}},
+       {ref,"a74b75302300862e42dda927123f644ab86b733c"}},
   0},
  {<<"edown">>,
   {git,"https://github.com/uwiger/edown.git",
